@@ -83,7 +83,7 @@ def solve_direct(k, f):
     return spsolve(k, f)
 
 
-def solve_direct_lagrange(k_lg, f):
+def solve_direct_lagrange(k_lg, f, tol=1e-5):
     """Solves a linear system of equations (Ku = f) using the direct solver method and the
     Lagrangian multiplier method.
 
@@ -91,11 +91,13 @@ def solve_direct_lagrange(k_lg, f):
     :type k: :class:`scipy.sparse.csc_matrix`
     :param f: N x 1 right hand side of the linear system
     :type f: :class:`numpy.ndarray`
+    :param float tol: Tolerance for the solver to achieve. The algorithm terminates when either
+        the relative or the absolute residual is below tol.
 
     :return: The solution vector to the linear system of equations
     :rtype: :class:`numpy.ndarray`
 
-    :raises RuntimeError: If the Lagrangian multiplier method exceeds a tolerance of 1e-5
+    :raises RuntimeError: If the Lagrangian multiplier method exceeds a given tolerance
     """
 
     u = spsolve(k_lg, np.append(f, 0))
@@ -103,8 +105,8 @@ def solve_direct_lagrange(k_lg, f):
     # compute error
     err = u[-1] / max(np.absolute(u))
 
-    if err > 1e-5:
-        err = "Lagrangian multiplier method error exceeds tolerance of 1e-5."
+    if err > tol:
+        err = f"Lagrangian multiplier method error ({err}) exceeds tolerance of {tol}."
         raise RuntimeError(err)
 
     return u[:-1]
