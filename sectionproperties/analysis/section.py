@@ -311,13 +311,15 @@ class Section:
         else:
             calculate_geom()
 
-    def calculate_warping_properties(self, solver_type="direct"):
+    def calculate_warping_properties(self, solver_type="direct", tol=1e-5):
         """Calculates all the warping properties of the cross-section and stores them in the
         :class:`~sectionproperties.analysis.section.SectionProperties` object contained in
         the ``section_props`` class variable.
 
         :param string solver_type: Solver used for solving systems of linear equations, either
             using the *'direct'* method or *'cgs'* iterative method
+        :param float tol: Tolerance for the solver to achieve. The algorithm terminates when either
+        the relative or the absolute residual is below tol.
 
         The following warping section properties are calculated:
 
@@ -397,14 +399,6 @@ class Section:
 
             # ILU decomposition of stiffness matrices
             def ilu_decomp(progress=None, task=None):
-                # ILU decomposition on regular stiffness matrix
-                k_precond = linalg.LinearOperator(
-                    (self.num_nodes, self.num_nodes), linalg.spilu(k).solve
-                )
-
-                if progress is not None:
-                    progress.update(task, advance=1)
-
                 # ILU decomposition on Lagrangian stiffness matrix
                 k_lg_precond = linalg.LinearOperator(
                     (self.num_nodes + 1, self.num_nodes + 1), linalg.spilu(k_lg).solve
@@ -413,7 +407,7 @@ class Section:
                 if progress is not None:
                     progress.update(task, advance=1)
 
-                return (k_precond, k_lg_precond)
+                return k_lg_precond
 
             # if the cgs method is used, perform ILU decomposition
             if solver_type == "cgs":
@@ -422,21 +416,21 @@ class Section:
                         description="[red]Performing ILU decomposition",
                         total=2,
                     )
-                    (k_precond, k_lg_precond) = ilu_decomp(progress=progress, task=task)
+                    k_lg_precond = ilu_decomp(progress=progress, task=task)
 
                     progress.update(
                         task,
                         description="[green]:white_check_mark: ILU decomposition complete",
                     )
                 else:
-                    (k_precond, k_lg_precond) = ilu_decomp()
+                    k_lg_precond = ilu_decomp()
 
             # solve for warping function
             def solve_warping():
                 if solver_type == "cgs":
-                    omega = solver.solve_cgs_lagrange(k_lg, f_torsion, m=k_lg_precond)
+                    omega = solver.solve_cgs_lagrange(k_lg, f_torsion, m=k_lg_precond, tol=tol)
                 elif solver_type == "direct":
-                    omega = solver.solve_direct_lagrange(k_lg, f_torsion)
+                    omega = solver.solve_direct_lagrange(k_lg, f_torsion, tol=tol)
 
                 return omega
 
@@ -508,22 +502,22 @@ class Section:
             # solve for shear functions psi and phi
             def solve_shear_functions(progress=None, task=None):
                 if solver_type == "cgs":
-                    psi_shear = solver.solve_cgs_lagrange(k_lg, f_psi, m=k_lg_precond)
+                    psi_shear = solver.solve_cgs_lagrange(k_lg, f_psi, m=k_lg_precond, tol=tol)
 
                     if progress is not None:
                         progress.update(task, advance=1)
 
-                    phi_shear = solver.solve_cgs_lagrange(k_lg, f_phi, m=k_lg_precond)
+                    phi_shear = solver.solve_cgs_lagrange(k_lg, f_phi, m=k_lg_precond, tol=tol)
 
                     if progress is not None:
                         progress.update(task, advance=1)
                 elif solver_type == "direct":
-                    psi_shear = solver.solve_direct_lagrange(k_lg, f_psi)
+                    psi_shear = solver.solve_direct_lagrange(k_lg, f_psi, tol=tol)
 
                     if progress is not None:
                         progress.update(task, advance=1)
 
-                    phi_shear = solver.solve_direct_lagrange(k_lg, f_phi)
+                    phi_shear = solver.solve_direct_lagrange(k_lg, f_phi, tol=tol)
 
                     if progress is not None:
                         progress.update(task, advance=1)
@@ -841,13 +835,15 @@ class Section:
         else:
             warping_analysis()
 
-    def calculate_frame_properties(self, solver_type="direct"):
+    def calculate_frame_properties(self, solver_type="direct", tol=1e-5):
         """Calculates and returns the properties required for a frame analysis. The properties are
         also stored in the :class:`~sectionproperties.analysis.section.SectionProperties`
         object contained in the ``section_props`` class variable.
 
         :param string solver_type: Solver used for solving systems of linear equations, either
             using the *'direct'* method or *'cgs'* iterative method
+        :param float tol: Tolerance for the solver to achieve. The algorithm terminates when either
+        the relative or the absolute residual is below tol.
 
         :return: Cross-section properties to be used for a frame analysis *(area, ixx, iyy, ixy, j,
             phi)*
@@ -949,9 +945,9 @@ class Section:
 
         # solve for warping function
         if solver_type == "cgs":
-            omega = solver.solve_cgs_lagrange(k_lg, f, m=k_lg_precond)
+            omega = solver.solve_cgs_lagrange(k_lg, f, m=k_lg_precond, tol=tol)
         elif solver_type == "direct":
-            omega = solver.solve_direct_lagrange(k_lg, f)
+            omega = solver.solve_direct_lagrange(k_lg, f, tol=tol)
 
         # calculate the torsion constant
         self.section_props.j = (
@@ -1317,6 +1313,7 @@ class Section:
         materials=True,
         mask=None,
         title="Finite Element Mesh",
+        legend=True,
         **kwargs,
     ):
         r"""Plots the finite element mesh.
@@ -1327,6 +1324,7 @@ class Section:
         :param mask: Mask array, of length ``num_nodes``, to mask out triangles
         :type mask: list[bool]
         :param string title: Plot title
+        :param bool legend: If set to True, plots the legend
         :param kwargs: Passed to :func:`~sectionproperties.post.post.plotting_context`
 
         :return: Matplotlib axes object
@@ -1400,9 +1398,10 @@ class Section:
                 )
 
                 # display the legend
-                ax.legend(
-                    loc="center left", bbox_to_anchor=(1, 0.5), handles=legend_labels
-                )
+                if legend:
+                    ax.legend(
+                        loc="center left", bbox_to_anchor=(1, 0.5), handles=legend_labels
+                    )
 
             # plot the mesh
             ax.triplot(
