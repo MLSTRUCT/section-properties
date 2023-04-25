@@ -311,7 +311,7 @@ class Section:
         else:
             calculate_geom()
 
-    def calculate_warping_properties(self, solver_type="direct", tol=1e-5):
+    def calculate_warping_properties(self, solver_type="direct", tol=1e-5, warn=True):
         """Calculates all the warping properties of the cross-section and stores them in the
         :class:`~sectionproperties.analysis.section.SectionProperties` object contained in
         the ``section_props`` class variable.
@@ -320,6 +320,7 @@ class Section:
             using the *'direct'* method or *'cgs'* iterative method
         :param float tol: Tolerance for the solver to achieve. The algorithm terminates when either
         the relative or the absolute residual is below tol.
+        :param warn: If true, enable warnings
 
         The following warping section properties are calculated:
 
@@ -357,12 +358,13 @@ class Section:
             polygons = [sec_geom.geom for sec_geom in self.geometry.geoms]
             disjoint_regions = section_geometry.check_geometry_disjoint(polygons)
             if disjoint_regions:
-                warnings.warn(
-                    "\nThe section geometry contains disjoint regions which is invalid for warping analysis.\n"
-                    "Please revise your geometry to ensure there is connectivity between all regions.\n"
-                    "Please see https://sectionproperties.readthedocs.io/en/latest/rst/analysis.html#warping-analysis for more "
-                    "information."
-                )
+                if warn:
+                    warnings.warn(
+                        "\nThe section geometry contains disjoint regions which is invalid for warping analysis.\n"
+                        "Please revise your geometry to ensure there is connectivity between all regions.\n"
+                        "Please see https://sectionproperties.readthedocs.io/en/latest/rst/analysis.html#warping-analysis for more "
+                        "information."
+                    )
 
         # create a new Section with the origin shifted to the centroid for calculation of the
         # warping properties such that the Lagrangian multiplier approach can be utilised
