@@ -10,7 +10,10 @@
 .env/
 .python-version
 
-# doc generated
+# Tests
+.coverage
+
+# Doc generated
 /docs/build
 /docs/source/sphinx_gallery_examples/
 
